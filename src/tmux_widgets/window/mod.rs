@@ -288,7 +288,8 @@ impl IvyTmuxWindow {
     }
 
     pub fn clipboard_paste_event(&self, pane_id: u32) {
-        let clipboard = self.primary_clipboard();
+        let display = gtk4::gdk::Display::default().unwrap();
+        let clipboard = display.clipboard();
         let future = clipboard.read_text_future();
 
         glib::spawn_future_local(glib::clone!(
