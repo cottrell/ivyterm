@@ -186,7 +186,7 @@ pub fn new_session(host: &str, password: &str) -> Result<SSHData, ()> {
         }
     }
 
-    if let Err(err) = session.userauth_password("tomaz", password) {
+    if let Err(err) = session.userauth_password(&username, password) {
         eprintln!(
             "Both public key and password authentication failed: {}!",
             err
