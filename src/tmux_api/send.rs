@@ -1,8 +1,9 @@
+use gtk4::gdk::{Key, ModifierType};
 use log::debug;
 
 use crate::{
     helpers::TmuxError,
-    keyboard::{Direction, KeyboardAction},
+    keyboard::{gtk_key_to_tmux, Direction, KeyboardAction},
     tmux_api::TmuxCommand,
 };
 
@@ -66,32 +67,15 @@ impl TmuxAPI {
     pub fn send_keypress(
         &self,
         pane_id: u32,
-        c: char,
-        prefix: String,
-        movement: Option<&str>,
+        keycode: u32,
+        keyval: Key,
+        state: ModifierType,
     ) -> Result<(), TmuxError> {
-        let cmd = if let Some(control) = movement {
-            // Navigation keys (left, right, page up, ...)
-            format!("send-keys -t %{} {}{}", pane_id, prefix, control)
-        } else if c.is_ascii_control() {
-            // A control character was just pressed
-            let ascii = c as u8;
-            // Ignore Ctrl and Shift for Enter
-            let prefix = if ascii == 13 { "" } else { prefix.as_str() };
-            format!("send-keys -t %{} -- {}\\{:03o}", pane_id, prefix, ascii)
-        } else {
-            // We send single-quoted keys, but what if we want to send a single quote?
-            let quote = if c == '\'' { '"' } else { '\'' };
+        let mut cmd = format!("send-keys -t %{} -H", pane_id);
 
-            // If Ctrl/Shift/Alt was pressed, prefix will not be empty and we need to
-            // remove Tmux's -l flag
-            let flags = if prefix.is_empty() { "-l" } else { "" };
-
-            format!(
-                "send-keys -t %{} {} -- {}{}{}{}",
-                pane_id, flags, quote, prefix, c, quote
-            )
-        };
+        if !gtk_key_to_tmux(&mut cmd, keycode, keyval, state) {
+            return Ok(())
+        }
 
         debug!("send_keypress: {}", &cmd[..cmd.len() - 1]);
         self.send_event(TmuxCommand::Keypress, &cmd)

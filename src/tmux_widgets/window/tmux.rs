@@ -11,7 +11,7 @@ use log::debug;
 use crate::{
     close_on_error,
     helpers::borrow_clone,
-    keyboard::{keycode_to_arrow_key, Direction},
+    keyboard::Direction,
     tmux_api::{LayoutFlags, LayoutSync, TmuxEvent},
     tmux_widgets::{
         separator::TmuxSeparator, terminal::TmuxTerminal, toplevel::TmuxTopLevel,
@@ -48,57 +48,9 @@ impl IvyTmuxWindow {
     }
 
     pub fn tmux_keypress(&self, pane_id: u32, keycode: u32, keyval: Key, state: ModifierType) {
-        let tmux = match get_tmux_ref(self) {
-            Some(tmux) => tmux,
-            None => return,
-        };
-
-        let mut prefix = String::new();
-        let mut shift_relevant = false;
-        if state.contains(ModifierType::ALT_MASK) {
-            prefix.push_str("M-");
-            shift_relevant = true;
-
-            // Hacky workaround for Alt+Backspace
-            if keycode == 22 {
-                close_on_error!(tmux.send_keypress(pane_id, '\x7f', prefix, None), self);
-                return;
-            }
+        if let Some(tmux) = get_tmux_ref(self) {
+            close_on_error!(tmux.send_keypress(pane_id, keycode, keyval, state), self);
         }
-        if state.contains(ModifierType::CONTROL_MASK) {
-            prefix.push_str("C-");
-            shift_relevant = true;
-        }
-        // Uppercase characters work without S-, so this case is only
-        // relevant when Ctrl/Alt is also pressed
-        if state.contains(ModifierType::SHIFT_MASK) && shift_relevant {
-            prefix.push_str("S-");
-        }
-
-        // TODO: All keys can be handled using keyval.name(), just exclude Ctrl, Shift, Alt, Tab, etc
-        // - if char
-        // - if Ctrl, Shift, Alt, Tab, etc
-        // - else
-        let mut result = Ok(());
-        if let Some(c) = keyval.to_unicode() {
-            result = tmux.send_keypress(pane_id, c, prefix, None);
-        } else if let Some(direction) = keycode_to_arrow_key(keycode) {
-            let direction = match direction {
-                crate::keyboard::Direction::Left => "Left",
-                crate::keyboard::Direction::Right => "Right",
-                crate::keyboard::Direction::Up => "Up",
-                crate::keyboard::Direction::Down => "Down",
-            };
-            result = tmux.send_keypress(pane_id, ' ', prefix, Some(direction));
-        } else if keycode >= 67 && keycode < 120 {
-            // This is a Function key
-            if let Some(name) = keyval.name() {
-                let name = name.as_str();
-                let name = name.replace('_', "");
-                result = tmux.send_function_key(pane_id, &name);
-            }
-        }
-        close_on_error!(result, self);
     }
 
     pub fn send_clipboard(&self, pane_id: u32, text: &str) {
